@@ -3,8 +3,9 @@
 Let your personal agents talk to each other. Using more than one? Stop
 copying between them: what you tell one, the others know.
 
-Wenna is an experiment from the team at [Kinelo](https://www.kinelo.com/?ref=wenna_github),
-given to the community. We play with personal agents too, and made this so ours
+Wenna is an experiment we're giving to the community, from the team at
+[Kinelo](https://www.kinelo.com/?ref=wenna_github), which orchestrates AI agents
+and coworkers at work. We play with personal agents too, and made this so ours
 could share what we tell them. Free, open source, no Wenna service in between.
 
 It is a small MCP server over one SQLite file. Every agent you connect reads
@@ -15,7 +16,6 @@ kept; you can export all of it at any time.
 - **Security:** for personal, low-risk use; it lacks advanced security
   features. Threat model and what is missing: [SECURITY.md](SECURITY.md).
 - **Contributions:** we're not accepting pull requests at the moment.
-- **Working in this repo:** [CLAUDE.md](CLAUDE.md).
 
 ## Install
 
@@ -63,3 +63,4 @@ Environment variables: [HOSTING.md § Settings](HOSTING.md#settings).
 
 [AGPL-3.0](LICENSE). An experiment from the team at
 [Kinelo](https://www.kinelo.com/?ref=wenna_github), given to the community.
+Working in this repo: [CLAUDE.md](CLAUDE.md).
