@@ -775,6 +775,19 @@ args = ["stdio"]
 default_tools_approval_mode = "approve"
 ```
 
+## Settings
+
+Environment variables. All `wenna` processes on a machine share one database.
+
+| Variable | Default | Used by |
+|---|---|---|
+| `WENNA_DB` | `$HOME/.wenna/wenna.db` (absolute path; when set, its directory must already exist) | all |
+| `WENNA_TOKEN` | none: required, 32+ bytes | `serve` |
+| `PORT` | `8080` | `serve` |
+| `WENNA_LISTEN_HOST` | `127.0.0.1`; loopback only (`127.0.0.1`, `::1`) unless the next is `true` | `serve` |
+| `WENNA_BEHIND_TLS_PROXY` | `false`; `true` only when a proxy terminates HTTPS in front of every request ([§ Choose a host](#choose-a-host)) | `serve` |
+| `WENNA_TRIGRAM` | `true`: recall matches text inside a word ("foods" finds "atlasfoods.com"). The database grows to several times your memories' text and writes slow down: watch its size once memory is large. `false` saves the space | all |
+
 ## Keep your data
 
 - **Export:** `curl -f -H "Authorization: Bearer $(cat ~/.wenna/token)" https://<your host>/api/export -o wenna-export.json.gz`
