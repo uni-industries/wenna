@@ -1,0 +1,5 @@
+*
+!backend/
+!Makefile
+!cloudflare/litestream.yml
+backend/**/*_test.go

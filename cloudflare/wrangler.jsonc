@@ -1,0 +1,23 @@
+// wenna on Cloudflare Containers (HOSTING.md § Cloudflare Containers).
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "wenna",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-28",
+	"containers": [
+		{
+			"class_name": "Wenna",
+			"image": "./Dockerfile",
+			// The image builds wenna from the repo root.
+			"image_build_context": "..",
+			// One database, one writer: never a second instance.
+			"max_instances": 1
+		}
+	],
+	"durable_objects": {
+		"bindings": [{ "name": "WENNA", "class_name": "Wenna" }]
+	},
+	"exports": {
+		"Wenna": { "type": "durable-object", "storage": "sqlite" }
+	}
+}

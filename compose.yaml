@@ -1,0 +1,32 @@
+# wenna behind a Cloudflare Tunnel on any machine with Docker (HOSTING.md).
+# No port is published: the only way in is the tunnel, which serves HTTPS.
+#   WENNA_TOKEN=... TUNNEL_TOKEN=... docker compose up -d
+services:
+  wenna:
+    build: .
+    restart: unless-stopped
+    # Longer than wenna's own shutdown timeout, so an export in flight can finish.
+    stop_grace_period: 15s
+    # Optional settings beyond these, such as OAuth (.env.example), one
+    # VAR=value per line. Never the token: it comes from the shell above.
+    env_file:
+      - path: .env.wenna
+        required: false
+    environment:
+      WENNA_TOKEN: ${WENNA_TOKEN:?set WENNA_TOKEN}
+      WENNA_BEHIND_TLS_PROXY: "true"
+    volumes:
+      - wenna-data:/data
+
+  cloudflared:
+    # cloudflared publishes no major-version tag, so this is exact.
+    image: cloudflare/cloudflared:2026.10.3
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN}
+    depends_on:
+      - wenna
+
+volumes:
+  wenna-data:

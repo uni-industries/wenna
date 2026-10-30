@@ -1,0 +1,11 @@
+# Litestream for cloudflare/Dockerfile. The Worker (src/index.ts) passes these
+# variables from the deploy's secrets; credentials come from
+# LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY.
+dbs:
+  - path: /data/wenna.db
+    replica:
+      type: s3
+      endpoint: ${REPLICA_ENDPOINT}
+      bucket: ${REPLICA_BUCKET}
+      path: wenna
+      region: auto

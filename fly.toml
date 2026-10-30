@@ -1,0 +1,36 @@
+# wenna on Fly.io (HOSTING.md § Fly.io). `fly launch --copy-config` adds the
+# app name and region.
+
+# Longer than wenna's own shutdown timeout, so an export in flight can finish.
+kill_timeout = 15
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  WENNA_BEHIND_TLS_PROXY = "true"
+  PORT = "8080"
+
+[[mounts]]
+  source = "wenna_data"
+  destination = "/data"
+
+# Pinned: Fly does not enforce a default size.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Stops when idle, starts on the next request; the volume keeps the data.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+    interval = "30s"
+    timeout = "5s"

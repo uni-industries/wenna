@@ -1,0 +1,19 @@
+# wenna on Render, as a Blueprint (HOSTING.md § Render). Any paid instance
+# type has disks; Free has none.
+services:
+  - type: web
+    name: wenna
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    numInstances: 1
+    healthCheckPath: /api/health
+    disk:
+      name: wenna-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: WENNA_BEHIND_TLS_PROXY
+        value: "true"
+      # Prompted once at creation: the user pastes the token file.
+      - key: WENNA_TOKEN
+        sync: false

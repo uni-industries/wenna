@@ -1,0 +1,14 @@
+# Real credentials. Variables are documented in .env.example.
+.env
+.env.*
+!.env.example
+
+.DS_Store
+# make build output.
+/bin/
+.vercel/
+# cloudflare/: npm and wrangler local state.
+node_modules/
+.wrangler/
+.claude/settings.local.json
+.claude/worktrees/

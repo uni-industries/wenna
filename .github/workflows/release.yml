@@ -1,0 +1,206 @@
+# Release on a version tag: run the gates, build wenna for Linux and macOS,
+# attach the archives and checksums.txt to a GitHub Release, and push the
+# serve image to GHCR. scripts/install.sh downloads what this publishes.
+#
+# cgo is required (SQLite), so every binary is built natively on a runner of
+# its own architecture. The tag is the version: `wenna version` prints it.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  gates:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache: false
+      - run: make ci
+
+  # Static musl binaries: built in Alpine, run on any Linux distribution.
+  linux:
+    needs: gates
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04, file_arch: x86-64 }
+          - { arch: arm64, runner: ubuntu-24.04-arm, file_arch: aarch64 }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      ASSET: wenna_linux_${{ matrix.arch }}.tar.gz
+      FILE_ARCH: ${{ matrix.file_arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build in Alpine
+        run: |
+          gover=$(awk '$1 == "go" { print $2 }' backend/go.mod)
+          mkdir dist
+          docker run --rm \
+            -v "$PWD:/src:ro" -v "$PWD/dist:/dist" -w /src \
+            -e VERSION="$GITHUB_REF_NAME" -e GOFLAGS=-buildvcs=false \
+            "golang:${gover}-alpine" sh -euc '
+              apk add --no-cache build-base
+              make build-static VERSION="$VERSION" OUT=/dist/wenna'
+      - name: Verify static, right arch, runs without a libc
+        run: |
+          info=$(file dist/wenna)
+          echo "$info"
+          [[ $info == *"statically linked"* && $info == *"$FILE_ARCH"* ]]
+          if ldd dist/wenna; then echo "dist/wenna is dynamically linked" >&2; exit 1; fi
+          got=$(docker run --rm -v "$PWD/dist:/b:ro" gcr.io/distroless/static-debian12 /b/wenna version)
+          [[ $got == "$GITHUB_REF_NAME" ]]
+          docker run --rm -v "$PWD/dist:/b:ro" -e WENNA_DB=/tmp/c.db gcr.io/distroless/static-debian12 /b/wenna export | gzip -t
+      - run: tar -czf "$ASSET" -C dist wenna
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  darwin:
+    needs: gates
+    strategy:
+      matrix:
+        include:
+          - { arch: arm64, runner: macos-15 }
+          - { arch: amd64, runner: macos-15-intel }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      ASSET: wenna_darwin_${{ matrix.arch }}.tar.gz
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          # The cache key ignores MACOSX_DEPLOYMENT_TARGET: never link C
+          # objects built for the runner's macOS.
+          cache: false
+      - name: Build
+        run: |
+          [[ $(go env GOARCH) == "$ARCH" ]]
+          # The oldest macOS this Go supports, read from a pure-Go build, so
+          # the cgo part does not raise it to the runner's macOS.
+          printf 'package main\n\nfunc main() {}\n' > "$RUNNER_TEMP/floor.go"
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/floor" "$RUNNER_TEMP/floor.go"
+          floor=$(vtool -show-build "$RUNNER_TEMP/floor" | awk '$1 == "minos" { print $2 }')
+          [[ -n $floor ]]
+          echo "FLOOR=$floor" >> "$GITHUB_ENV"
+          mkdir dist
+          MACOSX_DEPLOYMENT_TARGET=$floor \
+            CGO_CFLAGS="-O2 -g -mmacosx-version-min=$floor" \
+            CGO_LDFLAGS="-mmacosx-version-min=$floor" \
+            make build VERSION="$GITHUB_REF_NAME" OUT=dist/wenna 2>&1 | tee "$RUNNER_TEMP/build.log"
+          if grep -q 'built for newer' "$RUNNER_TEMP/build.log"; then exit 1; fi
+      - name: Verify minimum macOS and that it runs
+        run: |
+          vtool -show-build dist/wenna
+          [[ $(vtool -show-build dist/wenna | awk '$1 == "minos" { print $2 }') == "$FLOOR" ]]
+          [[ $(dist/wenna version) == "$GITHUB_REF_NAME" ]]
+          WENNA_DB="$RUNNER_TEMP/c.db" dist/wenna export | gzip -t
+      - run: tar -czf "$ASSET" -C dist wenna
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    needs: [linux, darwin]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: wenna_*
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum wenna_*.tar.gz > checksums.txt
+          cat checksums.txt
+          [[ $(wc -l < checksums.txt) -eq 4 ]]
+      # A tag with a "-" (v1.0.0-rc1) is a pre-release: never the latest.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          kind=(--latest)
+          if [[ $GITHUB_REF_NAME == *-* ]]; then kind=(--prerelease --latest=false); fi
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes "${kind[@]}" dist/*
+
+  # One image per architecture, built natively from the Dockerfile.
+  image:
+    needs: gates
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          image=ghcr.io/${GITHUB_REPOSITORY,,}
+          docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin <<< "$GH_TOKEN"
+          docker build \
+            --build-arg "VERSION=$GITHUB_REF_NAME" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.version=$GITHUB_REF_NAME" \
+            -t "$image:$GITHUB_REF_NAME-$ARCH" .
+          [[ $(docker run --rm "$image:$GITHUB_REF_NAME-$ARCH" version) == "$GITHUB_REF_NAME" ]]
+          docker push "$image:$GITHUB_REF_NAME-$ARCH"
+
+  # The multi-arch tags appear only once the release exists, so :latest never
+  # points at a version without binaries. A pre-release never moves :latest.
+  manifest:
+    needs: [image, release]
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - name: Tag the multi-arch image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          image=ghcr.io/${GITHUB_REPOSITORY,,}
+          docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin <<< "$GH_TOKEN"
+          tags=(-t "$image:$GITHUB_REF_NAME")
+          if [[ $GITHUB_REF_NAME != *-* ]]; then tags+=(-t "$image:latest"); fi
+          docker buildx imagetools create "${tags[@]}" \
+            "$image:$GITHUB_REF_NAME-amd64" "$image:$GITHUB_REF_NAME-arm64"
+          docker buildx imagetools inspect "$image:$GITHUB_REF_NAME"
