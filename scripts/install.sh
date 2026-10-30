@@ -92,4 +92,4 @@ case :$PATH: in
 esac
 
 echo "Next, connect your personal agents: https://github.com/uni-industries/wenna#connect-your-personal-agents"
-echo "Apps on this computer: https://github.com/uni-industries/wenna#apps-on-this-computer"
+echo "Apps on this computer: https://github.com/uni-industries/wenna/blob/main/HOSTING.md#apps-on-this-computer"

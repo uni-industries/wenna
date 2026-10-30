@@ -15,7 +15,7 @@ the user commits.
 
 | Path | Cost | When idle | OAuth-only apps | The user does |
 |---|---|---|---|---|
-| **Local only**: `wenna stdio` ([README](README.md)) | Free | — | — | Nothing |
+| **Local only**: `wenna stdio` ([§ Apps on this computer](#apps-on-this-computer)) | Free | — | — | Nothing |
 | **[Cloudflare Containers](#cloudflare-containers)**, recommended hosted path | Workers Paid $5/mo minimum; R2 free to 10 GB ([Workers](https://developers.cloudflare.com/workers/platform/pricing/), [Containers](https://developers.cloudflare.com/containers/platform/pricing/), [R2](https://developers.cloudflare.com/r2/pricing/)) | Sleeps; restores from R2 at the next request | Access on a domain; else WorkOS | 4, 5 with a domain |
 | **[Railway](#railway)** | Hobby $5/mo, includes $5 usage ([pricing](https://railway.com/pricing)) | Never sleeps (Serverless left off) | WorkOS, or Access on a domain | 2, 3 with a domain |
 | **[Render](#render)** | $7/mo instance + $0.25/GB/mo disk ([pricing](https://render.com/pricing)) | Never sleeps | WorkOS, or Access on a domain | 4, 5 with a domain |
@@ -629,7 +629,7 @@ need the path's OAuth provider ([§ Choose a host](#choose-a-host)). The bearer
 token keeps working for everything else.
 
 Codex may want a couple of extra settings to use Wenna well:
-[README § Codex](README.md#codex). Over HTTP, its `[mcp_servers.wenna]` takes
+[§ Codex](#codex). Over HTTP, its `[mcp_servers.wenna]` takes
 `url` and `bearer_token_env_var` in place of `command` and `args`.
 
 ### Apps set up in their own chat
@@ -720,6 +720,60 @@ per POST and returns a JSON reply, with no handshake.
    rule of its own, and the hourly job exists; in a new chat a stated fact is
    saved without asking,
    shows in the hosted export, and is forgotten on request.
+
+## Apps on this computer
+
+An app that starts a local command runs `wenna stdio`. No token: the app runs
+it as you. Once you host Wenna, connect these apps to the hosted URL instead,
+or they keep a separate copy.
+
+Apps configured with JSON:
+
+```json
+{ "mcpServers": { "wenna": { "command": "/full/path/to/wenna", "args": ["stdio"] } } }
+```
+
+Claude Code:
+
+```sh
+claude mcp add --scope user wenna -- wenna stdio
+```
+
+Apps that call a URL can use a local `wenna serve`, which requires a token,
+kept in a file only you can read ([§ The token](#the-token)):
+
+```sh
+mkdir -p -m 700 ~/.wenna
+[ -e ~/.wenna/token ] || (umask 077 && openssl rand -hex 32 > ~/.wenna/token)
+WENNA_TOKEN="$(cat ~/.wenna/token)" wenna serve
+claude mcp add --scope user --transport http wenna http://127.0.0.1:8080/api/mcp \
+  --header "Authorization: Bearer $(cat ~/.wenna/token)"
+```
+
+By default `wenna serve` listens on this machine only and refuses any other address: it
+speaks plain HTTP, so the token and your memories would cross the network
+unencrypted. To reach it from another machine, put a TLS proxy or an SSH
+tunnel in front of it, or self-host it on a platform that serves HTTPS:
+[§ Choose a host](#choose-a-host). A proxy on the same machine must send
+`Host: localhost`, or MCP requests are refused. A second `wenna serve` on the
+same port refuses to start.
+
+### Codex
+
+Codex may not pass a server's instructions to its model, and may ask before
+each write. If so, give it wenna's instructions as its own and approve the
+tools, in `~/.codex/config.toml`:
+
+```toml
+# The `Instructions` text in backend/internal/mcpserver/mcpserver.go. If you
+# already set developer_instructions, append it to yours.
+developer_instructions = """…"""
+
+[mcp_servers.wenna]
+command = "/full/path/to/wenna"
+args = ["stdio"]
+default_tools_approval_mode = "approve"
+```
 
 ## Keep your data
 
