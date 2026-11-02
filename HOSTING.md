@@ -57,33 +57,46 @@ the local one; there is no import.
 
 ### For agents setting up hosting
 
-- **First ask: a new server, or one the user already runs?** Look first, and
-  say what you find: a handoff note from the user, `~/.wenna/token`,
-  `~/.wenna/wenna.db`, a `wenna` entry in this app's MCP config. Already runs
-  one: [§ Add an agent to your server](#add-an-agent-to-your-server), and
-  nothing in this section after this bullet. A second server splits the
-  memory; a new token locks out every app already connected.
-- **Goals and checks, not click paths.** Vendor dashboards change; find the
-  current menu yourself. Each section gives what must be true and how to
-  check it.
-- **Ask, don't assume:** which apps, which of them run on this computer
-  (`wenna stdio`), whether the machine stays on, whether the user owns a
-  domain, which path. Name every cost before the user commits; never accept
-  billing or upgrade a plan yourself.
+Reference for an AI agent setting Wenna up on the user's behalf. The user's
+request sets the task; this section describes what a correct setup looks
+like.
+
+**What the agent can do decides the route:**
+
+| The agent | Examples | New server | Existing server |
+|---|---|---|---|
+| Runs commands on the user's computer | Claude Code, Codex | Any path in [§ Choose a host](#choose-a-host), by CLI or API | [§ Add an agent](#add-an-agent-to-your-server), by command |
+| Runs commands on a machine of its own | Instinct | Any hosted path; [your own machine](#your-own-machine) needs the user's computer | Its own config or connector list; the user enters the token |
+| Has no shell | Muse, claude.ai, grok.com | [Render's deploy link](#render), the user clicking through | Its connector screen: OAuth sign-in, or the token in its secret field |
+
+**New or existing.** Setup starts by settling whether the user already runs
+a Wenna server. Signs of one: a handoff note the user pasted, a `wenna`
+connector or MCP entry, `~/.wenna/token`, a "wenna server" memory. One server
+is one memory: a second server splits it, and a new token disconnects every
+app already connected. An existing server goes to
+[§ Add an agent to your server](#add-an-agent-to-your-server).
+
+**What a correct setup involves:**
+
+- **Goals and checks, not click paths.** Vendor dashboards change; each
+  section states what must be true and how to check it.
+- **The user's choices first:** which apps, which of them run on their
+  computer (`wenna stdio`), whether the machine stays on, whether they own a
+  domain, which path, [where the token lives](#the-token). Every cost is
+  named before the user commits; billing and plan upgrades are the user's to
+  accept.
 - **The user does only the steps each path lists** (sign-up, billing,
-  browser approvals, dashboard-only switches). You do the rest by CLI or API.
-  Check each path's tools first; install what is missing. On your own
-  machine, ask whether it meets [the keep-serving goals](#your-own-machine);
-  the user sets them.
-- **The user does the secret and personal parts:** sign-ins, emailed codes,
-  captchas. A vendor API key the user creates goes straight to a file in
-  `~/.wenna`, mode 600, never through the chat. Ask them to run commands with
-  `! …` when a secret must be typed.
-- **Never print the token** or put it on a command line; feed it from its
-  file ([§ The token](#the-token)). When an app needs the user to paste it,
-  you check it and put it on their clipboard
-  ([§ Give it to the user](#give-it-to-the-user)).
-- **Verify each step before the next.** Done when, for the hosted URL:
+  browser approvals, dashboard-only switches) and the personal ones:
+  sign-ins, emailed codes, captchas. The rest is CLI or API work; each path
+  lists its tools. On the user's own machine, the user confirms it meets
+  [the keep-serving goals](#your-own-machine).
+- **Secrets stay out of the conversation.** A vendor API key the user creates
+  goes into a file in `~/.wenna`, mode 600. Where a secret must be typed into
+  a shell, the user runs the command (`! …` in Claude Code). The token:
+  [§ The token](#the-token).
+- **Each step is checked before the next.** Done when, for the hosted URL
+  (`T` is the token file; an agent holding the token in a secrets store reads
+  it from there):
 
   ```sh
   T=~/.wenna/token
@@ -98,53 +111,90 @@ the local one; there is no import.
   (`curl -sf -H "Authorization: Bearer $(cat $T)" https://<host>/api/export | gunzip -c | grep -c '<test fact>'`);
   the app forgets it. Local `wenna export` reads this computer's database,
   which is the hosted one only on [a Mac](#on-a-mac).
-- **Finish with the handoff** ([§ Hand off to the next agent](#hand-off-to-the-next-agent)).
+- **Last, the handoff:** [§ Hand off to the next agent](#hand-off-to-the-next-agent).
 
 ### The token
 
-Every path keeps it in one file the user owns, on the computer you set up
-from, and feeds the platform and apps from that file.
+One random value; whoever holds it is the user. Where it lives is the
+user's choice:
+
+| Option | Where it lives | Fits |
+|---|---|---|
+| **[A. Password manager](#a-password-manager)**, recommended | The user's password manager; a file copy where a shell agent needs one | Every kind of agent |
+| [B. OAuth first](#b-oauth-first) | As in A or C, used only by apps that cannot sign in with OAuth | Most apps sign in with OAuth |
+| [C. One file](#c-one-file) | `~/.wenna/token` on the machine that set the server up | Every app runs on that machine, or an agent there hands it out |
+
+The token never goes into a chat message, a URL or command output. An
+existing token is in use: replacing it is rotation
+([§ Keep your data](#keep-your-data)).
+
+#### A. Password manager
+
+1. **The user creates it:** a new entry named "Wenna", with a generated
+   password of at least 48 characters, letters and digits only (symbols can
+   break app configs).
+2. **Into the server:** the user pastes it into the platform's secret
+   setting (Render's `WENNA_TOKEN` prompt, a dashboard secret), or a shell
+   agent feeds it from a file copy.
+3. **A file copy**, for an agent with a shell: the user copies the entry, then
+   on a Mac runs
+   `! (umask 077 && mkdir -p ~/.wenna && pbpaste | tr -d '\n' > ~/.wenna/token && pbcopy < /dev/null)`.
+   Elsewhere, the user saves it with an editor, mode 600.
+   [§ From the file](#from-the-file) feeds it on.
+4. **Into each app:** the user pastes it into the app's secret field (an API
+   key field, a secure form, a secrets store), never into a message.
+
+#### B. OAuth first
+
+Apps that sign in with OAuth (claude.ai, ChatGPT on the web, grok.com) use
+the OAuth URL; the user signs in with the provider, and the app never sees
+the token. It needs a provider: [§ Choose a host](#choose-a-host). The token
+stays for the server and for header-only apps (Muse, Instinct, Grok Bot, the
+xAI API), kept as in A or C. With no header-only apps, nothing past the
+server ever uses it.
+
+#### C. One file
+
+The token lives only in a file on the machine that set the server up:
 
 ```sh
 mkdir -p -m 700 ~/.wenna
 [ -e ~/.wenna/token ] || (umask 077 && openssl rand -hex 32 > ~/.wenna/token)
 ```
 
-An existing file is in use: keep it. Overwriting it is rotation
-([§ Keep your data](#keep-your-data)).
+An app on another computer gets a copy of the file, carried by the user,
+never through a chat. An app without a shell gets it from an agent on that
+machine: [§ Give it to the user](#give-it-to-the-user).
+
+#### From the file
 
 | Into | From the file |
 |---|---|
 | A command's input | `< ~/.wenna/token`, or `{ printf 'WENNA_TOKEN='; cat ~/.wenna/token; } \|` for `NAME=value` input |
 | A JSON body or file | `jq -n --rawfile t ~/.wenna/token '{… ($t\|rtrimstr("\n")) …}'` |
 | A command's argument | `"$(cat ~/.wenna/token)"`, only where nothing else works (it shows in the process list) |
-| A web form or an app's chat | The user pastes it from the clipboard: [§ Give it to the user](#give-it-to-the-user) |
-
-Apps on another computer need the token there too; the user copies the file
-over, never through a chat.
+| A web form or an app's chat | The user pastes it: from the password manager (A), or from the clipboard ([§ Give it to the user](#give-it-to-the-user)) |
 
 #### Give it to the user
 
-For any app that needs the token typed into its own screen. The user never
-looks for it, and you never see it.
+For an app that takes the token in its own screen, from an agent on a machine
+holding the file. The user never looks for it, and the agent never sees it.
 
-1. **Check it is this host's.** Never ask the user for it; it is in
-   `~/.wenna/token`.
+1. **It is this host's:**
 
    ```sh
    { printf 'Authorization: Bearer '; cat ~/.wenna/token; } |
      curl -s -o /dev/null -w '%{http_code}\n' -H @- https://<host>/api/export   # 200
    ```
 
-   No file, or 401: this computer does not hold this host's token. Ask the
-   user which computer set the host up; copy the file from there. Never
-   create a new one; that is rotation.
-2. **Copy it**, without the file's trailing newline. On a Mac:
+   No file, or 401: this machine does not hold this host's token. It is in
+   the user's password manager (A) or on the machine that set the host up
+   (C). A new one is never made here: that is rotation.
+2. **Onto the clipboard**, without the file's trailing newline. On a Mac:
    `tr -d '\n' < ~/.wenna/token | pbcopy`. Elsewhere the user opens the file
    and copies it.
-3. **Tell the user** the token is on their clipboard, and exactly where to
-   paste it (the app's field name). Wait for them to confirm.
-4. **Clear the clipboard:** `pbcopy < /dev/null`.
+3. **The user pastes it** where the app asks (its field name), and confirms.
+4. **The clipboard is cleared:** `pbcopy < /dev/null`.
 
 ### What every hosted path needs
 
@@ -350,9 +400,12 @@ jq -n --rawfile t ~/.wenna/token --arg o "$OWNER" '{
 Done when the response names the service; if `url` is empty, its
 `onrender.com` URL is in `GET /services/{id}`.
 
-Alternative: New → Blueprint in the dashboard, from [render.yaml](render.yaml);
-it needs the Git connection and prompts once for `WENNA_TOKEN`, which the user
-pastes. Every push to the linked branch then redeploys.
+Without a shell, or as an alternative: the Blueprint from
+[render.yaml](render.yaml), opened in the user's browser at
+`https://render.com/deploy?repo=https://github.com/uni-industries/wenna`.
+It needs the Git connection, a paid instance type, and prompts once for
+`WENNA_TOKEN`, which the user pastes from the password manager
+([A](#a-password-manager)). Every push to the linked branch then redeploys.
 
 - **Plan:** any paid instance; Free has no disk and sleeps. Paid does not
   sleep.
@@ -614,39 +667,49 @@ this kind. Cloudflare Containers works only through
 
 ## Add an agent to your server
 
-For an agent setting up a new app against a server the user already runs.
-[§ For agents](#for-agents-setting-up-hosting) applies except its hosting
-steps. Never create a server or a token here.
+Connecting one more app to a server the user already runs. Nothing here
+creates a server or a token.
 
-1. **Get the server's facts:** from the user's handoff note; else ask an app
-   already connected to recall "wenna server"; else ask the user for the URL.
-2. **Check it is up:** `GET https://<host>/api/health` is 200; `POST
-   https://<host>/api/mcp` without a token is 401.
-3. **Pick the address.** An app that signs in only with OAuth (claude.ai,
-   ChatGPT on the web, grok.com) uses the OAuth URL and needs no token. Any
-   other app uses the bearer URL (the second hostname when Access is on) and
-   the token.
-4. **The token, for bearer apps:** check `~/.wenna/token` against this host
-   ([§ Give it to the user](#give-it-to-the-user), step 1). Missing or 401:
-   the user copies the file from the computer the note names into
-   `~/.wenna/token`, mode 600, never through a chat.
-5. **Connect** the app: [§ Connect your personal agents](#connect-your-personal-agents).
-   Apps on this computer connect to the hosted URL, never `wenna stdio`.
-6. **Check:** the new app recalls "wenna server" (another app saved it), and
-   saves, then forgets, a test memory.
-7. **Hand off again** with the new app added to the note.
+1. **The server's facts:** from the user's handoff note; else a "wenna
+   server" memory, recalled by an app already connected; else the URL from
+   the user.
+2. **It is up:** `GET https://<host>/api/health` is 200, and `POST
+   https://<host>/api/mcp` without a token is 401. On an Access hostname
+   both are 401: Access answers first.
+3. **The address.** An app that signs in with OAuth (claude.ai, ChatGPT on
+   the web, grok.com) uses the OAuth URL, and the user signs in. Any other
+   app uses the bearer URL (the second hostname when Access is on) and the
+   token.
+4. **Connect**, by what the agent can do:
+   - **Commands on the user's computer** (Claude Code, Codex):
+     [§ Connect your personal agents](#connect-your-personal-agents), the
+     token from `~/.wenna/token`. No file there: a copy from the password
+     manager ([A](#a-password-manager), step 3), or from the machine that
+     holds it ([C](#c-one-file)). Apps on this computer use the hosted URL,
+     never `wenna stdio`.
+   - **Commands on a machine of its own** (Instinct): the server goes into
+     its own config or connector list; the user enters the token into its
+     secrets store. [§ Instinct](#instinct).
+   - **No shell** (Muse, claude.ai, grok.com, Grok Bot): the app's connector
+     screen; the user completes the OAuth sign-in, or pastes the token into
+     its secret field.
+     [§ Apps set up in their own chat](#apps-set-up-in-their-own-chat).
+5. **Check:** the new app recalls "wenna server", then saves and forgets a
+   test memory.
+6. **Hand off** again, the new app added.
 
 ### Hand off to the next agent
 
-At the end of every setup, and whenever the user asks how to add an agent.
+At the end of every setup, and whenever the user asks how to add an app.
 
-1. **Save the server as a memory**, so any connected app can rebuild the note.
-   Recall "wenna server" first; update that memory if it exists, else
-   remember one. Content: `User's Wenna server: MCP URL https://<host>/api/mcp;
-   OAuth via <Cloudflare Access | WorkOS | none>; bearer-only apps use
-   https://<bearer host>/api/mcp; token file ~/.wenna/token on <computer>.`
-   Keywords: `wenna`, `server`, `setup`. Never the token. Without wenna's
-   tools in this session, call them over HTTP:
+1. **The server, as a memory**, so any connected app can rebuild the note.
+   Recall "wenna server"; update that memory if one exists, else remember
+   one: `User's Wenna server: MCP URL https://<host>/api/mcp; OAuth via
+   <Cloudflare Access | WorkOS | none>; bearer-only apps use
+   https://<bearer host>/api/mcp; token kept <in the user's password manager
+   | in ~/.wenna/token on <machine>>.` Keywords: `wenna`, `server`, `setup`.
+   Never the token. An agent with wenna's tools uses them; a shell agent
+   without them calls them over HTTP:
 
    ```sh
    wenna_call() { # tool name, JSON arguments
@@ -660,15 +723,22 @@ At the end of every setup, and whenever the user asks how to add an agent.
    wenna_call recall '{"query":"wenna server"}'
    ```
 
-2. **Give the user the note**, filled in, to paste into the next agent:
+2. **The note**, filled in, for the user to paste into the next app. It
+   carries everything the app needs, so it fetches nothing:
 
    ```text
-   Connect this agent to my existing Wenna server. Don't set up a new one.
-   Guide: https://trywenna.com/llms.md, "Add an agent to an existing server".
-   MCP URL: https://<host>/api/mcp
-   OAuth: <Cloudflare Access | WorkOS | none>. Bearer-only apps use: https://<bearer host>/api/mcp
-   Token: ~/.wenna/token on <computer>. Copy the file; never paste it in chat.
+   Connect yourself to my Wenna server. It already exists: don't set up a
+   new server or make a new token. Wenna is the memory my AI apps share.
+   MCP server (Streamable HTTP): https://<host>/api/mcp
+   Sign-in: <Cloudflare Access | WorkOS> OAuth. Without OAuth, use
+   https://<bearer host>/api/mcp with the header "Authorization: Bearer <token>".
+   The token is <in my password manager, entry "Wenna" | in ~/.wenna/token on <machine>>.
+   I'll put it into your secret or API key field myself; never ask for it in chat.
+   Tools: remember, recall, update, forget, list. The server's initialize
+   response carries its usage rules; follow them.
+   Check: recall "wenna server", then save a test memory and forget it.
    Already connected: <apps>
+   Setup reference, if needed: https://trywenna.com/llms.md
    ```
 
 ## Connect your personal agents
@@ -702,9 +772,10 @@ Codex may want a couple of extra settings to use Wenna well:
 
 Muse: [§ Muse](#muse). Instinct: [§ Instinct](#instinct). In Grok Bot's chat, the user asks it to add a
 remote MCP server with the URL and the header `Authorization: Bearer <token>`,
-and pastes the token there themselves
-([§ Give it to the user](#give-it-to-the-user)); the agent never does. With
-Cloudflare Access on, give them the bearer hostname, not the Access one. The token then sits in that app's chat history;
+and pastes the token there themselves, from the password manager
+([A](#a-password-manager)) or the clipboard
+([§ Give it to the user](#give-it-to-the-user)); an agent never does. With
+Cloudflare Access on, it is the bearer hostname, not the Access one. The token then sits in that app's chat history;
 rotating it is the way back. Check: the app recalls a test memory another app
 saved.
 
@@ -712,7 +783,7 @@ saved.
 
 Set up in its chat, but the token goes into a form, not the chat.
 
-1. The user pastes this into a Muse chat; you fill in `<host>` (the bearer
+1. The user pastes this into a Muse chat, `<host>` filled in (the bearer
    hostname when Access is on):
 
    ```text
@@ -731,9 +802,10 @@ Set up in its chat, but the token goes into a form, not the chat.
    ```
 
 2. Muse answers with a **Connect** card. The user clicks it, reads the custom
-   connector notice and continues. You put the token on their clipboard
-   ([§ Give it to the user](#give-it-to-the-user)); they paste it into the
-   **API key** field as is (no `Bearer `), then **Add**.
+   connector notice and continues, then pastes the token into the **API
+   key** field as is (no `Bearer `), from the password manager
+   ([A](#a-password-manager)) or the clipboard
+   ([§ Give it to the user](#give-it-to-the-user)), then **Add**.
 3. Muse builds the connector and asks before each network request to the
    host. **Allow once** covers one request; **Always allow this site** covers
    the host's whole domain and every subdomain. The user picks.
@@ -751,7 +823,7 @@ Set up in its chat, but the token goes into a form, not the chat.
 Instinct connects over plain HTTP: `/api/mcp` takes one JSON-RPC request
 per POST and returns a JSON reply, with no handshake.
 
-1. The user pastes this into an Instinct chat; you fill in `<host>` (the
+1. The user pastes this into an Instinct chat, `<host>` filled in (the
    bearer hostname when Access is on):
 
    ```text
@@ -781,6 +853,7 @@ per POST and returns a JSON reply, with no handshake.
    ```
 
 2. The token goes wherever Instinct keeps a secret, entered by the user
+   from the password manager ([A](#a-password-manager)) or the clipboard
    ([§ Give it to the user](#give-it-to-the-user)), never in chat.
 3. Check as for Muse: the saved rule fetches the policy first and adds no
    rule of its own, and the hourly job exists; in a new chat a stated fact is
@@ -857,7 +930,8 @@ Environment variables. All `wenna` processes on a machine share one database.
 ## Keep your data
 
 - **Export:** `curl -f -H "Authorization: Bearer $(cat ~/.wenna/token)" https://<your host>/api/export -o wenna-export.json.gz`
-- **Revoke access:** overwrite the token file, set the new token where the
-  server reads it, restart, then update every app.
+- **Revoke access:** a new token (A: a new generated value in the entry; C:
+  overwrite the file), set where the server reads it, restart, then update
+  every app.
 - **Back up** by exporting regularly. The platform's disk is not a backup.
 - **Watch disk usage** as memory grows: [§ Disk](#disk).
