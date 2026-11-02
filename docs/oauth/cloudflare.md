@@ -117,8 +117,12 @@ setting; tell the user before changing it.
    - **Allowed redirect URIs** (`dynamic_client_registration.allowed_uris`):
      `https://claude.ai/api/mcp/auth_callback`,
      `https://chatgpt.com/connector/oauth/*`,
-     `https://chatgpt.com/connector_platform_oauth_redirect`.
+     `https://chatgpt.com/connector_platform_oauth_redirect`,
+     `https://grok.com/connectors-oauth-exchange-code/`.
      ChatGPT's come from [OpenAI](https://developers.openai.com/plugins/build/auth).
+     Check: `POST` the issuer's `registration_endpoint` with each URI in
+     `redirect_uris`; a missing one is refused with "redirect_uri is not
+     allowed".
    - **Allow localhost** and **allow loopback clients:** on (the default), for
      apps on the user's computer.
    - **Access token lifetime:** default. **Grant session duration:** 2 weeks;
