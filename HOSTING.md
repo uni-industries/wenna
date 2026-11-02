@@ -57,6 +57,12 @@ the local one; there is no import.
 
 ### For agents setting up hosting
 
+- **First ask: a new server, or one the user already runs?** Look first, and
+  say what you find: a handoff note from the user, `~/.wenna/token`,
+  `~/.wenna/wenna.db`, a `wenna` entry in this app's MCP config. Already runs
+  one: [§ Add an agent to your server](#add-an-agent-to-your-server), and
+  nothing in this section after this bullet. A second server splits the
+  memory; a new token locks out every app already connected.
 - **Goals and checks, not click paths.** Vendor dashboards change; find the
   current menu yourself. Each section gives what must be true and how to
   check it.
@@ -92,6 +98,7 @@ the local one; there is no import.
   (`curl -sf -H "Authorization: Bearer $(cat $T)" https://<host>/api/export | gunzip -c | grep -c '<test fact>'`);
   the app forgets it. Local `wenna export` reads this computer's database,
   which is the hosted one only on [a Mac](#on-a-mac).
+- **Finish with the handoff** ([§ Hand off to the next agent](#hand-off-to-the-next-agent)).
 
 ### The token
 
@@ -604,6 +611,65 @@ A platform that neither keeps files across restarts nor runs a container
 image cannot run wenna: the memory is a file. Serverless function hosts are
 this kind. Cloudflare Containers works only through
 [its own setup](#cloudflare-containers).
+
+## Add an agent to your server
+
+For an agent setting up a new app against a server the user already runs.
+[§ For agents](#for-agents-setting-up-hosting) applies except its hosting
+steps. Never create a server or a token here.
+
+1. **Get the server's facts:** from the user's handoff note; else ask an app
+   already connected to recall "wenna server"; else ask the user for the URL.
+2. **Check it is up:** `GET https://<host>/api/health` is 200; `POST
+   https://<host>/api/mcp` without a token is 401.
+3. **Pick the address.** An app that signs in only with OAuth (claude.ai,
+   ChatGPT on the web, grok.com) uses the OAuth URL and needs no token. Any
+   other app uses the bearer URL (the second hostname when Access is on) and
+   the token.
+4. **The token, for bearer apps:** check `~/.wenna/token` against this host
+   ([§ Give it to the user](#give-it-to-the-user), step 1). Missing or 401:
+   the user copies the file from the computer the note names into
+   `~/.wenna/token`, mode 600, never through a chat.
+5. **Connect** the app: [§ Connect your personal agents](#connect-your-personal-agents).
+   Apps on this computer connect to the hosted URL, never `wenna stdio`.
+6. **Check:** the new app recalls "wenna server" (another app saved it), and
+   saves, then forgets, a test memory.
+7. **Hand off again** with the new app added to the note.
+
+### Hand off to the next agent
+
+At the end of every setup, and whenever the user asks how to add an agent.
+
+1. **Save the server as a memory**, so any connected app can rebuild the note.
+   Recall "wenna server" first; update that memory if it exists, else
+   remember one. Content: `User's Wenna server: MCP URL https://<host>/api/mcp;
+   OAuth via <Cloudflare Access | WorkOS | none>; bearer-only apps use
+   https://<bearer host>/api/mcp; token file ~/.wenna/token on <computer>.`
+   Keywords: `wenna`, `server`, `setup`. Never the token. Without wenna's
+   tools in this session, call them over HTTP:
+
+   ```sh
+   wenna_call() { # tool name, JSON arguments
+     { printf 'Authorization: Bearer '; cat ~/.wenna/token; } |
+       curl -sf -H @- -H 'Content-Type: application/json' \
+         -H 'Accept: application/json, text/event-stream' \
+         --data "$(jq -nc --arg n "$1" --argjson a "$2" \
+           '{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:$n,arguments:$a}}')" \
+         https://<bearer host>/api/mcp
+   }
+   wenna_call recall '{"query":"wenna server"}'
+   ```
+
+2. **Give the user the note**, filled in, to paste into the next agent:
+
+   ```text
+   Connect this agent to my existing Wenna server. Don't set up a new one.
+   Guide: https://trywenna.com/llms.md, "Add an agent to an existing server".
+   MCP URL: https://<host>/api/mcp
+   OAuth: <Cloudflare Access | WorkOS | none>. Bearer-only apps use: https://<bearer host>/api/mcp
+   Token: ~/.wenna/token on <computer>. Copy the file; never paste it in chat.
+   Already connected: <apps>
+   ```
 
 ## Connect your personal agents
 
